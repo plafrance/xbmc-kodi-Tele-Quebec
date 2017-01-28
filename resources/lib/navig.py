@@ -10,7 +10,7 @@
 # vim......: set tabstop=4
 #
 
-import sys,urllib, xbmcgui, xbmcplugin, xbmcaddon,re,cache, simplejson, xbmc
+import sys,urllib, xbmcgui, xbmcplugin, xbmcaddon,re,cache, simplejson, xbmc, m3u8
 
 ADDON = xbmcaddon.Addon()
 ADDON_IMAGES_BASEPATH = ADDON.getAddonInfo('path')+'/resources/media/images/'
@@ -139,36 +139,27 @@ def jouer_video(media_uid):
             'http://production.ps.delve.cust.lldns.net/r/PlaylistService/media/%s/getPlaylistByMediaId' % media_uid\
         )\
     )
-    
-    # Preparer list de videos à jouer
-    playlist = xbmc.PlayList(xbmc.PLAYLIST_VIDEO)
-    playlist.clear()
 
-    # Analyser chaque stream disponible pour trouver la meilleure qualité
-    #for play_list_item in video_json['playlistItems']:
-    play_list_item =video_json['playlistItems'][0]
+    play_list_item=video_json['playlistItems'][0]
     
-    highest_bit_rate = 0
-    stream_url = None
-    for stream in play_list_item['streams']:
-        if stream['videoBitRate'] > highest_bit_rate:
-            highest_bit_rate = stream['videoBitRate']
-            stream_url = stream['url']
-    if stream_url:
-        # Générer un lien compatible pour librtmp
-        # rtmp_url - play_path - swf_url
-        url_final = '%s playPath=%s swfUrl=%s swfVfy=true' % (\
-            stream_url[:stream_url.find('mp4')],\
-            stream_url[stream_url.find('mp4'):],\
-            'http://s.delvenetworks.com/deployments/flash-player/flash-player-5.10.1.swf?playerForm=Chromeless'\
-        )
-       # log('Starting playback of :' + urllib.quote_plus(url_final))
+    # Obtient les streams dans un playlist m3u8
+    m3u8_pl=m3u8.load('https://mnmedias.api.telequebec.tv/m3u8/%s.m3u8' % play_list_item['refId'])
+
+    # Cherche le stream de meilleure qualité
+    bitrate=0
+    uri=None
+    if m3u8_pl.is_variant:
+        for pl in m3u8_pl.playlists:
+            if pl.stream_info.bandwidth>bitrate : uri=pl.uri
+
+    # lance le stream
+    if uri:
         item = xbmcgui.ListItem(\
             video_json['title'],\
             iconImage=video_json['imageUrl'],\
-            thumbnailImage=play_list_item['thumbnailImageUrl'], path=url_final)
+            thumbnailImage=play_list_item['thumbnailImageUrl'], path=uri)
         #playlist.add(url_final, item)
-        play_item = xbmcgui.ListItem(path=url_final)
+        play_item = xbmcgui.ListItem(path=uri)
         xbmc.log("**************************************DING? " +sys.argv[0])
         xbmcplugin.setResolvedUrl(__handle__,True, item)
         xbmc.log("**************************************DONG! ")
